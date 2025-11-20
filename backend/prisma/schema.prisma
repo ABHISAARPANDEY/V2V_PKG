@@ -1,0 +1,119 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum UserRole {
+  USER
+  ADMIN
+}
+
+enum DevicePlatform {
+  ANDROID
+  IOS
+}
+
+enum DetectionStatus {
+  NEW
+  UNDER_REVIEW
+  IGNORED
+  CONFIRMED
+}
+
+model User {
+  id            String   @id @default(uuid())
+  name          String
+  email         String   @unique
+  passwordHash  String
+  role          UserRole @default(USER)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  vehicles      Vehicle[]
+  devices       Device[]
+  adminActions  AdminActionLog[]
+
+  @@map("users")
+}
+
+model Vehicle {
+  id                String   @id @default(uuid())
+  userId            String
+  registrationNumber String?
+  make              String?
+  model             String?
+  year              Int?
+  vehicleUuid       String   @unique
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  user              User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  devices           Device[]
+  detectionsMade    UnregisteredDetection[] @relation("DetectedByVehicle")
+
+  @@map("vehicles")
+}
+
+model Device {
+  id              String         @id @default(uuid())
+  userId          String
+  vehicleId       String?
+  devicePlatform  DevicePlatform
+  deviceIdentifier String        @unique
+  lastSeenAt      DateTime?
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  user            User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  vehicle         Vehicle?       @relation(fields: [vehicleId], references: [id], onDelete: SetNull)
+  detectionsMade  UnregisteredDetection[] @relation("DetectedByDevice")
+
+  @@map("devices")
+}
+
+model UnregisteredDetection {
+  id                    String          @id @default(uuid())
+  detectedByVehicleId   String
+  detectedByDeviceId    String
+  unregisteredIdentifier String
+  rssi                  Int?
+  latitude              Float?
+  longitude             Float?
+  detectedAt            DateTime
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  status                DetectionStatus @default(NEW)
+
+  detectedByVehicle     Vehicle         @relation("DetectedByVehicle", fields: [detectedByVehicleId], references: [id], onDelete: Cascade)
+  detectedByDevice      Device          @relation("DetectedByDevice", fields: [detectedByDeviceId], references: [id], onDelete: Cascade)
+  adminActions          AdminActionLog[]
+
+  @@index([unregisteredIdentifier])
+  @@index([detectedAt])
+  @@index([status])
+  @@map("unregistered_detections")
+}
+
+model AdminActionLog {
+  id          String   @id @default(uuid())
+  adminUserId String
+  detectionId String
+  action      String
+  notes       String?
+  createdAt   DateTime @default(now())
+
+  adminUser   User     @relation(fields: [adminUserId], references: [id], onDelete: Cascade)
+  detection   UnregisteredDetection @relation(fields: [detectionId], references: [id], onDelete: Cascade)
+
+  @@index([detectionId])
+  @@index([createdAt])
+  @@map("admin_action_logs")
+}
+

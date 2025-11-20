@@ -1,0 +1,41 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: v2v-postgres
+    environment:
+      POSTGRES_USER: v2v_user
+      POSTGRES_PASSWORD: v2v_password
+      POSTGRES_DB: v2v_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U v2v_user"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build: .
+    container_name: v2v-backend
+    environment:
+      DATABASE_URL: "postgresql://v2v_user:v2v_password@postgres:5432/v2v_db?schema=public"
+      JWT_SECRET: "dev-jwt-secret-change-in-production"
+      PORT: 3001
+      CORS_ORIGINS: "http://localhost:3000,http://localhost:5173"
+    ports:
+      - "3001:3001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
+      - /app/node_modules
+    command: npm run start:dev
+
+volumes:
+  postgres_data:
+
